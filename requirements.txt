@@ -1,14 +1,8 @@
-# LangChain Ecosystem: Latest Stable Series (Nov 2025)
-langchain>=1.0.0,<2.0.0
-langchain-google-vertexai>=3.0.0,<4.0.0
-langserve>=0.3.0,<0.4.0
-
-# Web Server (Flexible Latest)
-fastapi
-uvicorn[standard]
-
-# Vertex AI Client (Minimum for Compatibility)
-google-cloud-aiplatform>=1.120.0
-
-# Final dependency required by LangServe for streaming
-sse-starlette
+langchain==0.3.27
+langchain-google-vertexai==2.0.28
+langserve==0.3.3
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+google-cloud-aiplatform==1.97.0
+sse-starlette==2.1.0
+pydantic==2.9.2

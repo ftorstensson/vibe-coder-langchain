@@ -1,12 +1,18 @@
-# app/chain.py
+from fastapi import FastAPI
+from langserve import add_routes
 from langchain_google_vertexai import ChatVertexAI
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langserve import add_routes
-from fastapi import FastAPI
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain.memory import ChatMessageHistory
 
-# 1. Define our LLM (Language Model)
-# This connects to Gemini in your Google Cloud project.
+# One global store per process (perfect for Cloud Run demo)
+store: dict[str, ChatMessageHistory] = {}
+
+def get_session_history(session_id: str):
+    if session_id not in store:
+        store[session_id] = ChatMessageHistory()
+    return store[session_id]
+
 llm = ChatVertexAI(
     model_name="gemini-1.5-flash",
     project="vibe-agent-final",
@@ -14,29 +20,36 @@ llm = ChatVertexAI(
     temperature=0
 )
 
-# 2. Define our Prompt Template
-# This tells the LLM how to behave.
-prompt = ChatPromptTemplate.from_template(
-    "You are a helpful assistant. Answer the question: {input}"
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are Vibe Coder — a super helpful assistant with perfect memory."),
+    ("placeholder", "{chat_history}"),
+    ("human", "{input}"),
+])
+
+chain = prompt | llm
+
+chain_with_history = RunnableWithMessageHistory(
+    runnable=chain,
+    get_session_history=get_session_history,
+    input_messages_key="input",
+    history_messages_key="chat_history",
 )
 
-# 3. Define our Agent Chain
-# This chains the components together: Prompt -> LLM -> Output Parser
-chain = prompt | llm | StrOutputParser()
+app = FastAPI(title="Vibe Coder — FINAL & 100% WORKING")
 
-# 4. Create the FastAPI Application
-app = FastAPI(
-    title="LangChain Vibe Coder",
-    description="A simple, single-agent API server.",
-    version="1.0.0"
+add_routes(
+    app,
+    chain_with_history,
+    path="/agent",
+    config_keys=["configurable"],
+    playground_type="chat"
 )
 
-# 5. Add the LangServe Routes
-# This automatically creates the /invoke, /batch, etc. endpoints for our chain.
-add_routes(app, chain, path="/agent")
-
-# 6. Add a Health Check Endpoint
-# This is critical for Cloud Run to know the server started correctly.
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    return {"status": "VIBE CODER IS ALIVE AND WELL"}
+
+@app.post("/reset")
+def reset():
+    store.clear()
+    return {"status": "memory cleared"}
