@@ -58,3 +58,15 @@ This document contains the hard-won, battle-tested lessons learned from catastro
     *   **The Error is the Manual:** LangServe requires the `sse-starlette` package for streaming, a fact only revealed by the `ImportError` in the logs. Trust the error message.
     *   **The Schema is the Law:** The `langserve` `/invoke` endpoint requires a specific nested JSON object: `{"input": {"chain_input_key": "value"}}`. The server's own validation errors are the final source of truth for the correct request structure.
 ---
+
+### **Entry 006: The Environmental Parity Failure (Local vs. Cloud Build)**
+
+*   **Symptom:** A `Dockerfile` and `requirements.txt` that build and run perfectly on a local machine (e.g., macOS) fail catastrophically during the `pip install` phase when deployed with `gcloud run deploy --source .`. The error is often a long, complex compilation failure (e.g., for `protobuf` or `grpcio`) that times out after 10 minutes.
+*   **Diagnosis:** This is a fundamental **Environmental Parity Failure**. The local machine often downloads pre-compiled binary packages ("wheels") that are specific to its architecture (e.g., macOS, ARM64). The clean Linux environment used by Google Cloud Build may not have a pre-compiled wheel available for that specific combination of library, Python version, and architecture. It therefore falls back to compiling the package from source, which can fail due to missing system-level C++ compilers or other dependencies not present in the base `python:slim` image.
+*   **The Unbreakable Fix (The "Local Push" Workflow):** Do not fight the cloud build environment. Trust the environment that works. The immediate and authoritative solution is to bypass Cloud Build entirely.
+    1.  **Build the container on the local machine**, where it is proven to work: `docker build -t [image_name] .`
+    2.  **Tag that proven artifact** for your cloud registry: `docker tag [image_name] [gcr_path]`
+    3.  **Push the finished artifact:** `docker push [gcr_path]`
+    4.  **Deploy the pre-built artifact:** `gcloud run deploy --image [gcr_path]`
+*   **Codified Law:** This workflow is now enshrined in the Foundation Document as the primary method for establishing a Stable Bedrock when dependency compilation issues arise. The `gcloud run deploy --source .` command is now considered high-risk.
+---

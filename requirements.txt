@@ -6,3 +6,4 @@ uvicorn[standard]==0.30.6
 google-cloud-aiplatform==1.97.0
 sse-starlette==2.1.0
 pydantic==2.9.2
+langchain-community

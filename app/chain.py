@@ -42,7 +42,7 @@ add_routes(
     chain_with_history,
     path="/agent",
     config_keys=["configurable"],
-    playground_type="chat"
+    playground_type="default"
 )
 
 @app.get("/health")
