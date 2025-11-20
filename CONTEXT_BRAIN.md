@@ -1,46 +1,49 @@
-# VIBE CODER - CONTEXT BRAIN (v8.0 - The Local Push)
-*Last Updated: 2025-11-18T10:45:00Z*
+# VIBE CODER - CONTEXT BRAIN (v9.0 - The Proof of Tool)
+*Last Updated: 2025-11-20T12:15:00Z*
 
 ---
 ## THE BRIDGE (SUMMARY)
 
-**PREVIOUS MISSION:** "The LangChain Golden Path (`--source` deploy)"
-**STATUS:** **CATASTROPHIC FAILURE.** While the application code and dependencies were proven to work perfectly on the local machine, all attempts to deploy using `gcloud run deploy --source .` failed. The build process in the Google Cloud Build environment could not compile the dependencies, proving a fundamental and unbreakable incompatibility between the local (macOS) and cloud (Linux) build environments.
-**NEXT MISSION:** "The Local Push Victory"
-**OBJECTIVE:** Establish a new, unbreakable stable bedrock by deploying our proven local application. This will be achieved by **building the Docker container on the local machine** and pushing the finished, working artifact directly to Cloud Run, bypassing the hostile Cloud Build environment entirely.
+**PREVIOUS MISSION:** "The Local Push Victory"
+**STATUS:** **TOTAL SUCCESS.** After multiple iterations, a stable bedrock was established. The final application, with corrected dependencies (`langchain-community`) and UI configuration (`playground_type="default"`), was successfully deployed via the "Local Push" workflow. The agent is live, healthy, and proven functional.
+**NEXT MISSION:** "Establish the PM"
+**OBJECTIVE:** Begin Phase 2 ("The Proof of Tool") by refactoring the existing agent to formally adopt the persona of the "Project Manager" (PM), the user's single point of contact, as defined in the Project Manifest.
 
 ---
 ## 1. CURRENT GROUND TRUTH (THE NOW)
 
 ### Mission Control
-**Current Objective:** Execute the "Local Push" deployment sequence.
+**Current Objective:** Execute the "Establish the PM" mission.
 
 | Status | Task | Notes |
 |---|---|---|
-| [ ] | **Mission 0.1: `docker build`** | Build the container image on the local machine using the proven `Dockerfile`. |
-| [ ] | Mission 0.2: `docker tag` | Tag the locally built image for the Google Artifact Registry. |
-| [ ] | Mission 0.3: `docker push` | Push the finished container to the registry. |
-| [ ] | Mission 0.4: `gcloud run deploy --image`| Deploy the pre-built, proven container to Cloud Run. |
+| [ ] | **Mission 1.1: Refactor Agent Persona** | Update the system prompt in `app/chain.py`. |
+| [ ] | **Mission 1.2: Deploy the PM Agent** | Execute the "Local Push" workflow. |
+| [ ] | **Mission 1.3: Verify PM Persona** | Confirm the new persona in the live playground. |
 
 ### Live Infrastructure
 | Service | URL / Endpoint | Status |
 |---|---|---|
-| **Vibe Coder LangChain** | *(No active URL)* | **OFFLINE - PENDING DEPLOYMENT** |
+| **Vibe Coder LangChain** | `https://vibe-coder-langchain-534939227554.australia-southeast1.run.app` | **ONLINE - STABLE BEDROCK ESTABLISHED** |
 
 ### Authoritative Sources of Truth
 | Layer | Source of Truth |
 |---|---|
 | **Core Principles** | `The Vibe Coder Foundation (v7.0)` |
+| **Project Vision** | `The Everything Agency - Project Manifest (v1.1)` |
 | **Deployment Lessons** | `SCAR_TISSUE.md` |
 | **Mission Status** | `CONTEXT_BRAIN.md` |
-| **Working Codebase** | Git Tag: `v1.0.0-final-fred-sydney` |
+| **Working Codebase** | Git Tag: *(Pending next commit)* |
 
 ---
 ## 2. HISTORICAL LEDGER (THE PAST)
 
+- **Entry 003: The Local Push Victory**
+    - **Event:** The "Local Push" workflow was successfully executed, deploying a live agent. Initial deployment failed due to a `ModuleNotFoundError` for `langchain-community` and a LangServe playground configuration error.
+    - **Root Cause:** Incomplete dependencies in `requirements.txt` and an incorrect `playground_type` in `app/chain.py`.
+    - **Outcome:** The issues were diagnosed via live error messages. The `requirements.txt` and `app/chain.py` files were corrected, and the application was successfully redeployed. This established the definitive Stable Bedrock and concluded Phase 1.
+
 - **Entry 002: The Environmental Parity Failure**
     - **Event:** After successfully building a stable LangChain application that worked locally, all deployment attempts using `gcloud run deploy --source .` failed catastrophically during the `pip install` step inside Google Cloud Build.
-    - **Root Cause:** A fundamental "Environmental Parity" mismatch. The local macOS environment used pre-compiled Python packages ("wheels"), while the clean Linux environment of Cloud Build was forced to compile them from source. This compilation failed due to missing system dependencies, timeouts, and subtle architectural differences.
-    - **Outcome:** The `--source .` deployment method was declared **high-risk** and deprecated in our foundation documents. A strategic pivot was mandated to the "Local Push" workflow, which is now the primary method for establishing a stable bedrock.
-
----
+    - **Root Cause:** A fundamental "Environmental Parity" mismatch. The local macOS environment used pre-compiled Python packages ("wheels"), while the clean Linux environment of Cloud Build was forced to compile them from source.
+    - **Outcome:** The `--source .` deployment method was declared **high-risk** and deprecated. A strategic pivot was mandated to the "Local Push" workflow, which became the primary method for establishing the stable bedrock.

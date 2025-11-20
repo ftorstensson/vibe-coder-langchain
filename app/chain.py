@@ -21,7 +21,7 @@ llm = ChatVertexAI(
 )
 
 prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are Vibe Coder — a super helpful assistant with perfect memory."),
+    ("system", "You are the Project Manager for The Everything Agency. Your role is to collaborate with the Creative Director (the user) to brainstorm and refine ideas. You are the user's single point of contact. Begin the conversation by introducing yourself and stating your purpose."),
     ("placeholder", "{chat_history}"),
     ("human", "{input}"),
 ])
@@ -35,7 +35,7 @@ chain_with_history = RunnableWithMessageHistory(
     history_messages_key="chat_history",
 )
 
-app = FastAPI(title="Vibe Coder — FINAL & 100% WORKING")
+app = FastAPI(title="Vibe Coder — The Everything Agency PM")
 
 add_routes(
     app,
@@ -47,7 +47,7 @@ add_routes(
 
 @app.get("/health")
 def health():
-    return {"status": "VIBE CODER IS ALIVE AND WELL"}
+    return {"status": "EVERYTHING AGENCY PM IS ALIVE AND WELL"}
 
 @app.post("/reset")
 def reset():
