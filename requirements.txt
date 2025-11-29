@@ -1,9 +1,20 @@
+# FINAL WORKING SET — COPY-PASTE THIS EXACTLY
 langchain==0.3.27
 langchain-google-vertexai==2.0.28
-langserve==0.3.3
+langserve[all]==0.3.1
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 google-cloud-aiplatform==1.97.0
-sse-starlette==2.1.0
+google-cloud-firestore==2.19.0
 pydantic==2.9.2
-langchain-community
+langgraph==0.2.20
+langgraph-checkpoint-firestore==0.1.7
+typing_extensions==4.12.2
+
+# CRITICAL: LangServe 0.3.1 requires sse-starlette <2.0
+sse-starlette==1.8.2
+
+# These are optional but safe — let pip resolve them
+langchain-core==0.3.80
+langchain-text-splitters==0.3.11
+langsmith<0.5
