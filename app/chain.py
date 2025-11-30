@@ -9,11 +9,11 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_vertexai import ChatVertexAI
 from langgraph.graph import StateGraph, END
 from langgraph_checkpoint_firestore import FirestoreSaver
-from langgraph.prebuilt import ToolNode, create_react_agent
+from langgraph.prebuilt import create_react_agent
 from langserve import add_routes
 from google.cloud.firestore_v1 import Client
 
-from app.tools import inspector_tools, list_files, read_file
+from app.tools import inspector_tools, list_files, read_file, write_file
 
 class AgentState(TypedDict, total=False):
     messages: Annotated[Sequence[BaseMessage], add_messages]
@@ -26,27 +26,32 @@ llm = ChatVertexAI(
     temperature=0,
 )
 
-inspector_agent = create_react_agent(llm, tools=[list_files, read_file])
+inspector_agent = create_react_agent(llm, tools=[list_files, read_file, write_file])
 
+# THE FINAL FIX: A smarter prompt that teaches the supervisor how to finish a task.
 supervisor_prompt = ChatPromptTemplate.from_messages([
-    ("system", """You are the Project Manager. If the user wants to list files, read files, or inspect code -> respond with exactly one word: inspector. Otherwise, answer directly and finish."""),
+    ("system", """You are the Project Manager for The Everything Agency. Your job is to delegate tasks or summarize results.
+
+CRITICAL RULES:
+1. Review the most recent message in the conversation.
+2. If the most recent message is from a HUMAN asking to READ, WRITE, LIST, or MODIFY files, you MUST delegate to the Inspector. To do this, respond with only the single word: inspector
+3. If the most recent message is a TOOL response, your job is to summarize this result for the human user. Provide a concise, helpful summary of what was done, and then you are finished.
+4. For any other general conversation, respond directly to the human.
+"""),
     ("placeholder", "{messages}")
 ])
 supervisor = supervisor_prompt | llm
 
-def sanitize_messages(messages):
-    safe = []
-    for msg in messages:
-        if isinstance(msg, (HumanMessage, AIMessage)):
-            safe.append(msg)
-        else:
-            safe.append(AIMessage(content=str(msg.content)))
-    return safe
-
 def supervisor_node(state: AgentState):
     print("---SUPERVISOR NODE---")
-    safe_msgs = sanitize_messages(state["messages"])
-    response = supervisor.invoke({"messages": safe_msgs})
+    safe_messages = []
+    for msg in state["messages"]:
+        if hasattr(msg, "content") and not isinstance(msg, (HumanMessage, AIMessage)):
+            safe_messages.append(AIMessage(content=str(msg.content)))
+        else:
+            safe_messages.append(msg)
+    
+    response = supervisor.invoke({"messages": safe_messages})
     if response.content.strip().lower() == "inspector":
         return {"next": "inspector"}
     else:
@@ -54,8 +59,14 @@ def supervisor_node(state: AgentState):
 
 def inspector_node(state: AgentState):
     print("---INSPECTOR NODE---")
-    safe_msgs = sanitize_messages(state["messages"])
-    result = inspector_agent.invoke({"messages": safe_msgs})
+    safe_messages = []
+    for msg in state["messages"]:
+        if hasattr(msg, "content") and not isinstance(msg, (HumanMessage, AIMessage)):
+            safe_messages.append(AIMessage(content=str(msg.content)))
+        else:
+            safe_messages.append(msg)
+            
+    result = inspector_agent.invoke({"messages": safe_messages})
     return {"messages": result["messages"]}
 
 workflow = StateGraph(AgentState)
@@ -63,11 +74,10 @@ workflow.add_node("supervisor", supervisor_node)
 workflow.add_node("inspector", inspector_node)
 workflow.add_node("tools", inspector_tools)
 workflow.set_entry_point("supervisor")
-workflow.add_conditional_edges("supervisor", lambda s: s.get("next", "__end__"), {"inspector": "inspector", "__end__": END})
+workflow.add_conditional_edges("supervisor", lambda s: s.get("next"), {"inspector": "inspector", "__end__": END})
 workflow.add_edge("inspector", "tools")
 workflow.add_edge("tools", "supervisor")
 
-# THE FINAL FIX: Patched FirestoreSaver to handle the NoneType bug
 class FixedFirestoreSaver(FirestoreSaver):
     async def aput(self, config, checkpoint, metadata, new_versions=None):
         configurable = config.setdefault("configurable", {})
