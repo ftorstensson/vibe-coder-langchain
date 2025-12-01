@@ -2,6 +2,28 @@
 
 This document contains the hard-won, battle-tested lessons learned from catastrophic failures. These are not theories; they are unbreakable laws paid for with time and frustration. This document MUST be consulted before debugging any deployment issues.
 
+---
+
+### **Entry 012: The `FixedFirestoreSaver` Bug and Patch**
+
+*   **Symptom:** After resolving all dependency and code issues, the application crashes on the first invocation of a new thread with a `TypeError: sequence item 2: expected str instance, NoneType found`.
+*   **Diagnosis:** This is a confirmed bug in the `langgraph-checkpoint-firestore==0.1.7` library. The `aput` method does not correctly handle the case where `checkpoint_id` is `None` on the initial write for a new thread.
+*   **The Unbreakable Fix:** Implement a patched `FixedFirestoreSaver` class that inherits from the original. This class must override the `aput` method to check for and forcefully set a `checkpoint_id` (e.g., using `uuid.uuid4()`) if one does not exist, before calling the parent method with the corrected config.
+*   **Golden Path Code:**
+    ```python
+    import uuid
+    from langgraph_checkpoint_firestore import FirestoreSaver
+
+    class FixedFirestoreSaver(FirestoreSaver):
+        async def aput(self, config, checkpoint, metadata, new_versions=None):
+            configurable = config.setdefault("configurable", {})
+            if configurable.get("checkpoint_id") is None:
+                configurable["checkpoint_id"] = str(uuid.uuid4())
+            if configurable.get("checkpoint_ns") is None:
+                configurable["checkpoint_ns"] = ""
+            return await super().aput(config, checkpoint, metadata, new_versions)
+    ```
+---
 
 ### **Entry 011: The Supervisor's Infinite Loop (GraphRecursionError)**
 

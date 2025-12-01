@@ -19,16 +19,16 @@ class AgentState(TypedDict, total=False):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     next: Literal["supervisor", "inspector", "__end__"]
 
+# THE FINAL, STRATEGIC UPGRADE: Change region to access the superior model
 llm = ChatVertexAI(
-    model_name="gemini-1.5-flash",
+    model_name="gemini-2.0-flash",
     project=os.environ.get("GCP_PROJECT", "vibe-agent-final"),
-    location="australia-southeast1",
+    location="us-central1", # Using a region where the model is available
     temperature=0,
 )
 
 inspector_agent = create_react_agent(llm, tools=[list_files, read_file, write_file])
 
-# THE FINAL FIX: A smarter prompt that teaches the supervisor how to finish a task.
 supervisor_prompt = ChatPromptTemplate.from_messages([
     ("system", """You are the Project Manager for The Everything Agency. Your job is to delegate tasks or summarize results.
 
