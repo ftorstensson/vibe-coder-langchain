@@ -4,6 +4,20 @@ This document contains the hard-won, battle-tested lessons learned from catastro
 
 ---
 
+### **Entry 016: The Next.js 15 Linting Blockade (Accessibility)**
+
+*   **Symptom:** The build or dev server fails with `Error: Buttons must have discernible text: Element has no title attribute`.
+*   **Diagnosis:** Next.js 15 (via ESLint) enforces strict accessibility standards by default. An icon-only button (like our "Send" button) triggers a build failure if it lacks an `aria-label`.
+*   **The Unbreakable Fix:** Always add `aria-label="Description"` to any icon-only interactive element.
+*   **Golden Path Code:**
+    ```tsx
+    <button type="submit" aria-label="Send Message">
+      <Icon />
+    </button>
+    ```
+
+---
+
 ### **Entry 015: The "Nested Agent" Recursion Loop**
 
 *   **Symptom:** A Supervisor delegates to a Sub-Agent (e.g., Inspector). The graph enters an infinite loop until it hits `GraphRecursionError` (limit 25).

@@ -1,41 +1,41 @@
-# VIBE CODER - CONTEXT BRAIN (v14.0 - Phase 2 Victory)
+# VIBE CODER - CONTEXT BRAIN (v15.0 - Phase 3.1 Completed)
 *Last Updated: 2025-12-02*
 
 ---
 ## THE BRIDGE (SUMMARY)
 
-**PREVIOUS MISSION:** "Project Brain Alpha" (Proof of Tool)
-**STATUS:** **TOTAL VICTORY.** We have established a production-grade "Linear Delegation Architecture" for the Supervisor/Inspector pattern.
+**PREVIOUS MISSION:** "Phase 3: The Rich Experience" (Local Setup)
+**STATUS:** **SUCCESS.** The Next.js frontend is initialized, running locally, and successfully communicating with the Python backend via CORS.
 **ACCOMPLISHMENTS:**
-1.  **Strict JSON Routing:** Eliminated `gemini-2.0-flash` hallucination using `with_structured_output`.
-2.  **Directive Injection:** Solved the "Lazy Inspector" bug by injecting `HumanMessage` directives.
-3.  **Recursion Prevention:** Flattened the graph topology to `Supervisor -> Inspector -> END`.
-4.  **Cloud Parity:** Verified identical behavior on Local and Cloud Run environments.
+1.  **Body Created:** Next.js 15 + Tailwind + Lucide UI initialized.
+2.  **CORS Opened:** Backend updated to allow requests from `localhost:3000`.
+3.  **Brain Connected:** Chat interface successfully routes both General and Tool-based requests locally.
+4.  **Architecture Validated:** The Supervisor/Inspector/End topology holds up under UI interaction.
 
-**NEXT MISSION:** "Phase 3: The Rich Experience"
-**OBJECTIVE:** Now that the "Tool" works, we build the "Product." We will construct the frontend interface that allows a user to chat with this agent system properly.
+**NEXT MISSION:** "Phase 3.2: The Cloud Mirror"
+**OBJECTIVE:** Deploy the Frontend to Google Cloud Run so it can talk to the Cloud Backend. This involves containerizing the Next.js app and configuring dynamic Environment Variables to switch between Local and Cloud backends.
 
 ---
 ## 1. CURRENT GROUND TRUTH (THE NOW)
 
 ### Mission Control
-**Current Objective:** Begin Phase 3 (Frontend Integration).
+**Current Objective:** Prepare and Deploy Frontend to Cloud Run.
 
 | Status | Task | Notes |
 |---|---|---|
-| [x] | **Mission 3.1: Create `project_brain.md`** | Confirmed Local & Cloud. |
-| [x] | **Mission 3.2: Architecture Fix** | Implemented Linear Delegation. |
-| [ ] | **Mission 4.1: Frontend Setup** | Initialize the React/Next.js frontend. |
+| [x] | **Mission 4.1: Frontend Setup** | Next.js initialized and connected locally. |
+| [ ] | **Mission 4.2: Dynamic Configuration** | Configure `NEXT_PUBLIC_API_URL` handling for Environment-agnostic builds. |
+| [ ] | **Mission 4.3: Frontend Dockerfile** | Create a multi-stage `Dockerfile` for Next.js standalone output. |
+| [ ] | **Mission 4.4: Cloud Deployment** | Build, Push, and Deploy Frontend to Cloud Run. |
+| [ ] | **Mission 4.5: CORS Update** | Update Backend CORS to allow the new Cloud Frontend URL. |
 
 ### Live Infrastructure
 | Service | URL / Endpoint | Status |
 |---|---|---|
-| **Vibe Coder LangGraph** | `https://vibe-coder-langchain-534939227554.australia-southeast1.run.app` | **ONLINE (Stable v2.1)** |
+| **Backend (Cloud)** | `https://vibe-coder-langchain-534939227554.australia-southeast1.run.app` | **ONLINE (v2.1)** |
+| **Frontend (Local)** | `http://localhost:3000` | **ONLINE** |
 
-### Architecture: The Linear Delegation Pattern
-To avoid recursion and API errors with Gemini 2.0, we follow this strict flow:
-1.  **Supervisor** receives User Input.
-2.  **Supervisor** outputs a Structured Decision (JSON).
-3.  If **Delegate**: Supervisor injects a `HumanMessage` ("Execute this...") and routes to `Inspector`.
-4.  **Inspector** executes full ReAct loop (Think -> Tool -> Result).
-5.  **Inspector** finishes -> Graph goes to `END`.
+### Architecture: The "Body & Brain" Pattern
+*   **Frontend:** Next.js Client Component (`page.tsx`) manages chat state.
+*   **Protocol:** HTTP POST to `/agent/invoke`.
+*   **Security:** CORS middleware on Backend whitelist `localhost:3000` (and soon the Cloud URL).
