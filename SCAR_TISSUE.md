@@ -4,6 +4,49 @@ This document contains the hard-won, battle-tested lessons learned from catastro
 
 ---
 
+### **Entry 015: The "Nested Agent" Recursion Loop**
+
+*   **Symptom:** A Supervisor delegates to a Sub-Agent (e.g., Inspector). The graph enters an infinite loop until it hits `GraphRecursionError` (limit 25).
+*   **Diagnosis:** The Sub-Agent was a `create_react_agent`, which has its own internal "Think-Act-Observe" loop. When it finished, it returned a final text response. The outer graph topology was `inspector -> tools -> supervisor`. The Supervisor saw the Inspector's final answer, treated it as new input, and re-delegated it, causing the loop.
+*   **The Unbreakable Fix:** **Linear Delegation Topology.** If a Sub-Agent is autonomous (like a ReAct agent), it must route to `END`, not back to the Supervisor. The job is done when the Sub-Agent speaks.
+*   **Golden Path Topology:**
+    ```python
+    workflow.add_conditional_edges("supervisor", lambda s: s.get("next"), {"inspector": "inspector", "__end__": END})
+    workflow.add_edge("inspector", END) # Do NOT go back to Supervisor
+    ```
+
+---
+
+### **Entry 014: The "Consecutive AI Message" Crash (Error 400)**
+
+*   **Symptom:** The application crashes with `InvalidArgument: 400 Please ensure that the number of function response parts is equal to the number of function call parts`.
+*   **Diagnosis:** The Supervisor output an `AIMessage` ("Delegating..."), and then the Inspector immediately ran and generated another `AIMessage` (Tool Call). This created a history sequence of `[Human, AI, AI]`. The Gemini API strictly forbids consecutive AI turns; there must be a User turn in between.
+*   **The Unbreakable Fix:** **The "Human Injection" Pattern.** The Supervisor must NOT output an `AIMessage` when delegating. Instead, it should inject a `HumanMessage` into the state, acting as a proxy for the user's intent. This satisfies the `User -> Model -> User` requirement.
+*   **Golden Path Code:**
+    ```python
+    if decision.action == "delegate":
+        # Inject a directive as if it were a user speaking
+        directive = HumanMessage(content="Execute this request...", name="Supervisor")
+        return {"messages": [directive], "next": "inspector"}
+    ```
+
+---
+
+### **Entry 013: The Gemini "Silent Refusal" (Zero-Token Output)**
+
+*   **Symptom:** The LLM returns an empty string `content=''` with `usage_metadata={'output_tokens': 0}`. No error is raised, but the logic fails.
+*   **Diagnosis:** This occurs with `gemini-2.0-flash` at `temperature=0` when using strict System Prompts (e.g., "Output only one word"). The model's safety/chat-tuning conflicts with the constraint, causing it to "refuse" by saying nothing.
+*   **The Unbreakable Fix:** **Structured Output (JSON Mode).** Do not rely on string parsing for routing. Use `.with_structured_output(PydanticSchema)`. This forces the model into a validation mode that bypasses the "chatty" refusal triggers. Also, raise `temperature` slightly (e.g., `0.1`).
+*   **Golden Path Code:**
+    ```python
+    class RoutingDecision(BaseModel):
+        action: Literal["delegate", "respond"]
+    
+    router = llm.with_structured_output(RoutingDecision)
+    ```
+
+---
+
 ### **Entry 012: The `FixedFirestoreSaver` Bug and Patch**
 
 *   **Symptom:** After resolving all dependency and code issues, the application crashes on the first invocation of a new thread with a `TypeError: sequence item 2: expected str instance, NoneType found`.
