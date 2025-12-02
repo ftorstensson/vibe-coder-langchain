@@ -1,46 +1,68 @@
-# app/chain.py
 import os
 import uuid
 from fastapi import FastAPI
 from typing_extensions import TypedDict, Annotated, Sequence, Literal
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, ToolMessage
 from langgraph.graph.message import add_messages
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_google_vertexai import ChatVertexAI
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_google_vertexai import ChatVertexAI, HarmBlockThreshold, HarmCategory
 from langgraph.graph import StateGraph, END
 from langgraph_checkpoint_firestore import FirestoreSaver
 from langgraph.prebuilt import create_react_agent
 from langserve import add_routes
+from langchain_core.tools import tool
 from google.cloud.firestore_v1 import Client
-
+from pydantic import BaseModel, Field
 from app.tools import inspector_tools, list_files, read_file, write_file
+
 
 class AgentState(TypedDict, total=False):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     next: Literal["supervisor", "inspector", "__end__"]
 
-# THE FINAL, STRATEGIC UPGRADE: Change region to access the superior model
+# Safety Settings
+safety_settings = {
+    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+}
+
 llm = ChatVertexAI(
     model_name="gemini-2.0-flash",
     project=os.environ.get("GCP_PROJECT", "vibe-agent-final"),
-    location="us-central1", # Using a region where the model is available
-    temperature=0,
+    location="us-central1",
+    temperature=0.1,
+    safety_settings=safety_settings,
 )
 
+# The Inspector is an autonomous agent with its own tool loop
 inspector_agent = create_react_agent(llm, tools=[list_files, read_file, write_file])
 
-supervisor_prompt = ChatPromptTemplate.from_messages([
-    ("system", """You are the Project Manager for The Everything Agency. Your job is to delegate tasks or summarize results.
+class RoutingDecision(BaseModel):
+    """The decision on how to route the user's request."""
+    reasoning: str = Field(description="Brief thought process.")
+    action: Literal["delegate_to_inspector", "respond_to_user"] = Field(
+        description="Choose 'delegate_to_inspector' for file operations. Choose 'respond_to_user' for general questions."
+    )
+    response_content: str = Field(
+        description="If responding, the text. If delegating, the specific instruction for the Inspector."
+    )
 
-CRITICAL RULES:
-1. Review the most recent message in the conversation.
-2. If the most recent message is from a HUMAN asking to READ, WRITE, LIST, or MODIFY files, you MUST delegate to the Inspector. To do this, respond with only the single word: inspector
-3. If the most recent message is a TOOL response, your job is to summarize this result for the human user. Provide a concise, helpful summary of what was done, and then you are finished.
-4. For any other general conversation, respond directly to the human.
+supervisor_router = llm.with_structured_output(RoutingDecision)
+
+supervisor_prompt = ChatPromptTemplate.from_messages([
+    ("system", """You are the Project Manager.
+RULES:
+1. If the user asks to create, read, write, list, or modify files -> Action: delegate_to_inspector.
+   Content: "The user wants: [summarize request]. Execute this using your tools."
+2. If the user asks a general question -> Action: respond_to_user.
+   Content: [The helpful answer].
 """),
-    ("placeholder", "{messages}")
+    MessagesPlaceholder(variable_name="messages"),
 ])
-supervisor = supervisor_prompt | llm
+supervisor = supervisor_prompt | supervisor_router
+
 
 def supervisor_node(state: AgentState):
     print("---SUPERVISOR NODE---")
@@ -51,11 +73,17 @@ def supervisor_node(state: AgentState):
         else:
             safe_messages.append(msg)
     
-    response = supervisor.invoke({"messages": safe_messages})
-    if response.content.strip().lower() == "inspector":
-        return {"next": "inspector"}
+    decision: RoutingDecision = supervisor.invoke({"messages": safe_messages})
+    print(f"---DECISION: {decision.action}---")
+    
+    if decision.action == "delegate_to_inspector":
+        # Inject directive for the Inspector
+        directive = HumanMessage(content=decision.response_content, name="Supervisor")
+        return {"messages": [directive], "next": "inspector"}
     else:
-        return {"messages": [response], "next": "__end__"}
+        ai_msg = AIMessage(content=decision.response_content)
+        return {"messages": [ai_msg], "next": "__end__"}
+
 
 def inspector_node(state: AgentState):
     print("---INSPECTOR NODE---")
@@ -65,18 +93,27 @@ def inspector_node(state: AgentState):
             safe_messages.append(AIMessage(content=str(msg.content)))
         else:
             safe_messages.append(msg)
-            
+    
+    # Run the Inspector Agent (It handles the tool usage loop internally)
     result = inspector_agent.invoke({"messages": safe_messages})
+    
+    # We return the NEW messages generated by the inspector
+    # Note: create_react_agent returns the FULL state, so we filter or just pass the difference?
+    # LangGraph's 'add_messages' reducer handles duplication via ID usually, 
+    # but strictly we just want to return the last message or the new chain.
+    # For now, returning result["messages"] is safe with add_messages.
     return {"messages": result["messages"]}
+
 
 workflow = StateGraph(AgentState)
 workflow.add_node("supervisor", supervisor_node)
 workflow.add_node("inspector", inspector_node)
-workflow.add_node("tools", inspector_tools)
+
 workflow.set_entry_point("supervisor")
+
+# The Critical Fix: Inspector goes to END, not back to Supervisor
 workflow.add_conditional_edges("supervisor", lambda s: s.get("next"), {"inspector": "inspector", "__end__": END})
-workflow.add_edge("inspector", "tools")
-workflow.add_edge("tools", "supervisor")
+workflow.add_edge("inspector", END)
 
 class FixedFirestoreSaver(FirestoreSaver):
     async def aput(self, config, checkpoint, metadata, new_versions=None):
@@ -87,14 +124,17 @@ class FixedFirestoreSaver(FirestoreSaver):
             configurable["checkpoint_ns"] = ""
         return await super().aput(config, checkpoint, metadata, new_versions)
 
+
 checkpointer = FixedFirestoreSaver(
     project_id="vibe-agent-final",
     checkpoints_collection="checkpoints"
 )
 graph = workflow.compile(checkpointer=checkpointer)
 
+
 app = FastAPI(title="Vibe Coder LangGraph Agency")
 add_routes(app, graph, path="/agent")
+
 
 @app.get("/health")
 def health():
