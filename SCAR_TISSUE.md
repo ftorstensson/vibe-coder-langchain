@@ -4,6 +4,16 @@ This document contains the hard-won, battle-tested lessons learned from catastro
 
 ---
 
+### **Entry 017: The Next.js Build-Time Variable Trap**
+
+*   **Symptom:** The deployed Frontend works but tries to connect to `localhost`, causing connection errors in the browser console, even though `ENV` vars were set in Cloud Run.
+*   **Diagnosis:** Next.js "bakes in" `NEXT_PUBLIC_` variables at **build time**, not runtime. Setting an environment variable in Cloud Run is too late; it must be present during the `docker build` process.
+*   **The Unbreakable Fix:**
+    1.  Add `ARG NEXT_PUBLIC_API_URL` and `ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL` to the Dockerfile.
+    2.  Pass the variable during the build command: `docker build --build-arg NEXT_PUBLIC_API_URL=...`
+
+---
+
 ### **Entry 016: The Next.js 15 Linting Blockade (Accessibility)**
 
 *   **Symptom:** The build or dev server fails with `Error: Buttons must have discernible text: Element has no title attribute`.

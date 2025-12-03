@@ -1,3 +1,9 @@
+/**
+ * VIBE CODER - AGENCY CONSOLE (v2.0)
+ * Updated: 2025-12-03
+ * Features: Dynamic API URL, Accessibility Fixes, Modern Dark UI
+ */
+
 "use client";
 
 import { useState, useRef, useEffect } from "react";
@@ -37,8 +43,11 @@ export default function Home() {
     setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
     setIsLoading(true);
 
+    // DYNAMIC CONFIGURATION: Use Env Var or default to Localhost
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
     try {
-      const response = await fetch("http://localhost:8000/agent/invoke", {
+      const response = await fetch(`${API_BASE_URL}/agent/invoke`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -63,7 +72,6 @@ export default function Home() {
       if (!response.ok) throw new Error("Network response was not ok");
 
       const data = await response.json();
-      
       const responseMessages = data.output.messages;
       const lastMessage = responseMessages[responseMessages.length - 1];
       

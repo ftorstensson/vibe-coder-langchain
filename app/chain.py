@@ -1,3 +1,9 @@
+"""
+VIBE CODER - BACKEND BRAIN (v2.2)
+Updated: 2025-12-03
+Features: Linear Delegation Architecture, Strict JSON Routing, CORS for Cloud Frontend
+"""
+
 import os
 import uuid
 from fastapi import FastAPI
@@ -21,7 +27,7 @@ class AgentState(TypedDict, total=False):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     next: Literal["supervisor", "inspector", "__end__"]
 
-# Safety Settings
+# Safety Settings: Disable blocks to prevent "Silent Refusal"
 safety_settings = {
     HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
@@ -29,6 +35,7 @@ safety_settings = {
     HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
 }
 
+# LLM Configuration
 llm = ChatVertexAI(
     model_name="gemini-2.0-flash",
     project=os.environ.get("GCP_PROJECT", "vibe-agent-final"),
@@ -37,8 +44,10 @@ llm = ChatVertexAI(
     safety_settings=safety_settings,
 )
 
+# The Inspector Agent (The Worker)
 inspector_agent = create_react_agent(llm, tools=[list_files, read_file, write_file])
 
+# Structured Output Schema for Routing
 class RoutingDecision(BaseModel):
     """The decision on how to route the user's request."""
     reasoning: str = Field(description="Brief thought process.")
@@ -67,6 +76,7 @@ supervisor = supervisor_prompt | supervisor_router
 def supervisor_node(state: AgentState):
     print("---SUPERVISOR NODE---")
     safe_messages = []
+    # Sanitize history to prevent Gemini format errors
     for msg in state["messages"]:
         if hasattr(msg, "content") and not isinstance(msg, (HumanMessage, AIMessage)):
             safe_messages.append(AIMessage(content=str(msg.content)))
@@ -77,6 +87,7 @@ def supervisor_node(state: AgentState):
     print(f"---DECISION: {decision.action}---")
     
     if decision.action == "delegate_to_inspector":
+        # Inject directive as a HumanMessage to force the Inspector to act
         directive = HumanMessage(content=decision.response_content, name="Supervisor")
         return {"messages": [directive], "next": "inspector"}
     else:
@@ -97,14 +108,18 @@ def inspector_node(state: AgentState):
     return {"messages": result["messages"]}
 
 
+# Graph Topology
 workflow = StateGraph(AgentState)
 workflow.add_node("supervisor", supervisor_node)
 workflow.add_node("inspector", inspector_node)
 
 workflow.set_entry_point("supervisor")
+
+# Critical Fix: Inspector goes to END (Linear Delegation)
 workflow.add_conditional_edges("supervisor", lambda s: s.get("next"), {"inspector": "inspector", "__end__": END})
 workflow.add_edge("inspector", END)
 
+# Checkpointing
 class FixedFirestoreSaver(FirestoreSaver):
     async def aput(self, config, checkpoint, metadata, new_versions=None):
         configurable = config.setdefault("configurable", {})
@@ -114,7 +129,6 @@ class FixedFirestoreSaver(FirestoreSaver):
             configurable["checkpoint_ns"] = ""
         return await super().aput(config, checkpoint, metadata, new_versions)
 
-
 checkpointer = FixedFirestoreSaver(
     project_id="vibe-agent-final",
     checkpoints_collection="checkpoints"
@@ -122,19 +136,22 @@ checkpointer = FixedFirestoreSaver(
 graph = workflow.compile(checkpointer=checkpointer)
 
 
+# FastAPI Application
 app = FastAPI(title="Vibe Coder LangGraph Agency")
 
-# NEW: Allow CORS for Frontend
+# CORS CONFIGURATION (The Gates)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://vibe-coder-frontend-534939227554.australia-southeast1.run.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 add_routes(app, graph, path="/agent")
-
 
 @app.get("/health")
 def health():
