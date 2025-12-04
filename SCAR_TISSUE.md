@@ -4,6 +4,29 @@ This document contains the hard-won, battle-tested lessons learned from catastro
 
 ---
 
+### **Entry 018: The "Model Retirement" Trap (404 Not Found)**
+
+*   **Symptom:** Calling `gemini-1.5-pro` or `gemini-1.5-pro-002` resulted in `404 Not Found`, even in `us-central1`.
+*   **Diagnosis:** In the 2025 timeline, 1.5 Pro is deprecated/retired. Google retires specific version tags aggressively.
+*   **The Unbreakable Fix:**
+    1.  **Probe First:** Always use a Python script to hit the Vertex AI API (`aiplatform.Model.list` or direct `ChatVertexAI` invocation) to confirm what is actually available.
+    2
+|---|---|---|
+| [x] | **5.1: Dynamic Mind** | PM Persona injected and verified. |
+| [x] | **5.2: Hybrid Brain** | 2.5 Pro + 2.5 Flash architecture live. |
+| [ ] | **6.1: Firestore State** | Design `project_state` schema for the board. |
+| [ ] | **6.2: Frontend Layout** | Implement Split-Screen UI in Next.js. |
+| [ ] | **6.3: State Hooks** | Create `useProjectState` listener. |
+
+### Live Infrastructure
+| Service | URL / Endpoint | Status |
+|---|---|---|
+| **Frontend (Cloud)** | `https://vibe-coder-frontend-534939227554.australia-southeast1.run.app` | **ONLINE** |
+| **Backend (Cloud)** | `https://vibe-coder-langchain-53493922755.  **Use Stable Aliases:** Prefer `gemini-2.5-pro` over `gemini-2.5-pro-001` unless you need a specific frozen version.
+    3.  **Upgrade:** We successfully migrated to `gemini-2.5-pro` (PM) and `gemini-2.5-flash` (Workers).
+
+---
+
 ### **Entry 017: The Next.js Build-Time Variable Trap**
 
 *   **Symptom:** The deployed Frontend works but tries to connect to `localhost`, causing connection errors in the browser console, even though `ENV` vars were set in Cloud Run.
