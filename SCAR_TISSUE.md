@@ -4,6 +4,18 @@ This document contains the hard-won, battle-tested lessons learned from catastro
 
 ---
 
+### **Entry 019: The Firestore Composite Index Barrier (Error 400)**
+
+*   **Symptom:** The Checkpointer crashed with `400 The query requires an index` when trying to load history.
+*   **Diagnosis:** Firestore requires a specific "Composite Index" for queries that filter by one field (`thread_id`) and sort by another (`checkpoint_id`). Without it, the query is rejected.
+*   **The Unbreakable Fix:**
+    1.  Run the code to trigger the error.
+    2.  Click the URL provided in the error message (`https://console.firebase...`).
+    3.  Wait for the index to build (Status: "Enabled") before retrying.
+    4.  **Never** try to manually construct indexes via CLI unless you are an expert; trust the auto-generated link.
+
+---
+
 ### **Entry 018: The "Model Retirement" Trap (404 Not Found)**
 
 *   **Symptom:** Calling `gemini-1.5-pro` or `gemini-1.5-pro-002` resulted in `404 Not Found`, even in `us-central1`.

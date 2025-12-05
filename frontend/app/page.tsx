@@ -1,7 +1,7 @@
 /**
- * VIBE CODER - AGENCY CONSOLE (v2.0)
- * Updated: 2025-12-03
- * Features: Dynamic API URL, Accessibility Fixes, Modern Dark UI
+ * VIBE CODER - AGENCY CONSOLE (v2.1 - Memory Fix)
+ * Updated: 2025-12-05
+ * Fix: thread_id persistence (Solves Amnesia Bug) & Syntax Cleaned
  */
 
 "use client";
@@ -24,6 +24,10 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // FIX: Generate ID once per session, not per message
+  const [threadId] = useState(() => "web-client-" + Date.now());
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -43,10 +47,11 @@ export default function Home() {
     setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
     setIsLoading(true);
 
-    // DYNAMIC CONFIGURATION: Use Env Var or default to Localhost
+    // DYNAMIC CONFIGURATION
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
     try {
+      // FIX: Clean template literal (No backslashes)
       const response = await fetch(`${API_BASE_URL}/agent/invoke`, {
         method: "POST",
         headers: {
@@ -63,7 +68,7 @@ export default function Home() {
           },
           config: {
             configurable: {
-              thread_id: "web-client-" + Date.now(),
+              thread_id: threadId, // FIX: Use the persistent ID
             },
           },
         }),
@@ -92,15 +97,16 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen bg-neutral-950 text-neutral-200 font-mono">
-      {/* Header */}
       <header className="flex items-center p-4 border-b border-neutral-800 bg-neutral-900/50 backdrop-blur">
         <Terminal className="w-6 h-6 mr-3 text-emerald-500" />
         <h1 className="text-lg font-bold tracking-tight">
           VIBE CODER <span className="text-neutral-500">AGENCY CONSOLE</span>
         </h1>
+        <div className="ml-auto text-xs text-neutral-600">
+          ID: {threadId.slice(-6)}
+        </div>
       </header>
 
-      {/* Chat Area */}
       <main className="flex-1 overflow-y-auto p-4 space-y-6">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-neutral-500 opacity-50">
@@ -156,7 +162,6 @@ export default function Home() {
         <div ref={messagesEndRef} />
       </main>
 
-      {/* Input Area */}
       <div className="p-4 border-t border-neutral-800 bg-neutral-900/50 backdrop-blur">
         <form
           onSubmit={handleSubmit}
