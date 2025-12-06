@@ -4,6 +4,20 @@ This document contains the hard-won, battle-tested lessons learned from catastro
 
 ---
 
+### **Entry 021: The "Ghost File" Hallucination**
+*   **Symptom:** The Agent claims to write files (`Pacman.js`), but they don't appear in the app.
+*   **Diagnosis:** The Agent defaults to writing in the **Root Directory** (`/app`) or using default frameworks (React/JS), ignoring the specific project structure (`frontend/`, Next.js, TSX).
+*   **The Unbreakable Fix:** **Draconian Persona Prompts.** You cannot rely on implied context. You must explicitly instruct the agent: "You are running in Root. You MUST prefix all paths with `frontend/`. You MUST use TypeScript."
+
+---
+
+### **Entry 020: The Gemini Protocol Violation (AI->AI Crash)**
+*   **Symptom:** `500 Internal Server Error` during a delegation.
+*   **Diagnosis:** Gemini 2.5 strictly enforces a `User -> Model -> User` conversational turn. If the Supervisor (AI) delegates to a Worker (AI), and we feed that Worker's output back to the Supervisor as an `AIMessage`, the history becomes `AI -> AI`. Gemini rejects this.
+*   **The Unbreakable Fix:** **The "Virtual User" Pattern.** When a Worker Agent finishes, wrap its output in a `HumanMessage(name="WorkerName")`. This tricks the Supervisor's model into thinking it received a report from a human/system, preserving the alternating turn structure.
+
+---
+
 ### **Entry 019: The Firestore Composite Index Barrier (Error 400)**
 
 *   **Symptom:** The Checkpointer crashed with `400 The query requires an index` when trying to load history.

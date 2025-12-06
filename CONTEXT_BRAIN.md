@@ -1,37 +1,35 @@
-# VIBE CODER - CONTEXT BRAIN (v19.0 - Memory Solved)
+# VIBE CODER - CONTEXT BRAIN (v20.0 - The Shared Understanding)
 *Last Updated: 2025-12-06*
 
 ---
 ## THE BRIDGE (SUMMARY)
 
-**PREVIOUS MISSION:** "Mission 6: The Shared Understanding (Persistence)"
-**STATUS:** **TOTAL SUCCESS.** The "Amnesia" bug is dead.
+**PREVIOUS MISSION:** "Mission 6: The Shared Understanding"
+**STATUS:** **TOTAL SUCCESS.** The Agency has a Memory, a Voice, and a Face.
 **ACCOMPLISHMENTS:**
-1.  **Custom Engine:** Implemented `CustomFirestoreSaver` to bypass library bugs.
-2.  **Time-Sortable IDs:** Solved "History Length 1" by using Timestamp-based Checkpoint IDs.
-3.  **Composite Indexing:** Configured Firestore to allow complex history retrieval.
-4.  **Hybrid Intelligence:** Gemini 2.5 Pro (Brain) + 2.5 Flash (Hands) running on Cloud Run.
+1.  **Memory Solved:** Implemented `CustomFirestoreSaver` with Time-Sortable IDs to fix Amnesia.
+2.  **Visual Board:** Created a Real-Time Project Board (Split-Screen UI) connected to Firestore.
+3.  **Protocol Hardening:** Implemented `GeminiToolAdapter` and `HumanMessage` wrapping to stop Gemini 2.5 crashes.
+4.  **Strict Standards:** Updated Agent Personas to enforce `frontend/` paths and TypeScript.
 
-**NEXT MISSION:** "Mission 6.2: The Visual Board"
-**OBJECTIVE:** The Agent remembers the plan, but the User can't *see* it yet. We need to implement the Split-Screen UI:
-*   **Left:** Chat (The Vibe).
-*   **Right:** Project Board (The Truth - Checklist, Files, Status).
+**NEXT MISSION:** "Mission 7: The Builder"
+**OBJECTIVE:** Now that the infrastructure is bulletproof, we focus on the **Quality of Code**. We will test the "Head of Frontend" to ensure it builds working, error-free Next.js applications on the first try.
 
 ---
 ## 1. CURRENT GROUND TRUTH (THE NOW)
 
 ### Mission Control
-**Current Objective:** Build the Frontend "Project Board".
+**Current Objective:** Consolidate and Deploy.
 
 | Status | Task | Notes |
 |---|---|---|
-| [x] | **Mission 6.1: Persistence** | Memory works Local & Cloud. |
-| [ ] | **Mission 6.2: Backend Tool** | Create `update_board` tool for the Architect agent. |
-| [ ] | **Mission 6.3: Frontend UI** | Create the Split-Screen Layout in Next.js. |
-| [ ] | **Mission 6.4: Real-Time Sync** | Connect UI to Firestore `project_state` document. |
+| [x] | **6.1: Persistence** | Memory works. |
+| [x] | **6.2: Visual Board** | Board updates in real-time. |
+| [x] | **6.3: Stability** | Gemini Protocol violations resolved. |
+| [ ] | **7.1: Code Quality** | Verify "Pacman" builds correctly in Cloud. |
 
 ### Live Infrastructure
 | Service | URL / Endpoint | Status |
 |---|---|---|
-| **Frontend (Cloud)** | `https://vibe-coder-frontend-534939227554.australia-southeast1.run.app` | **ONLINE** |
-| **Backend (Cloud)** | `https://vibe-coder-langchain-534939227554.australia-southeast1.run.app` | **ONLINE (v24.0)** |
+| **Frontend (Cloud)** | `https://vibe-coder-frontend-534939227554.australia-southeast1.run.app` | **UPDATING...** |
+| **Backend (Cloud)** | `https://vibe-coder-langchain-534939227554.australia-southeast1.run.app` | **UPDATING...** |

@@ -1,10 +1,10 @@
 """
-VIBE CODER - BACKEND BRAIN (v24.0 - Custom Engine)
-Updated: 2025-12-05
+VIBE CODER - BACKEND BRAIN (v30.0 - Gemini Adapter)
+Updated: 2025-12-06
 Features:
-- CustomFirestoreSaver (Bypasses buggy library completely)
-- Hybrid Gemini 2.5
-- Time-Sortable Checkpoint IDs
+- GeminiToolAdapter: Automatically converts ToolMessages to HumanMessages before API call.
+- Re-enabled create_react_agent (now safe to use).
+- Custom Engine (Memory Solved).
 """
 
 import os
@@ -14,9 +14,9 @@ import asyncio
 from google.cloud import firestore
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional, Any, Dict, AsyncIterator
-from typing_extensions import TypedDict, Annotated, Sequence, Literal
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
+from typing import Optional, Any, Dict, AsyncIterator, Sequence, List
+from typing_extensions import TypedDict, Annotated, Literal
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage, ToolMessage
 from langgraph.graph.message import add_messages
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_google_vertexai import ChatVertexAI, HarmBlockThreshold, HarmCategory
@@ -24,9 +24,8 @@ from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import create_react_agent
 from langserve import add_routes
 from pydantic import BaseModel, Field
-from app.tools import inspector_tools, list_files, read_file, write_file
+from app.tools import inspector_tools, list_files, read_file, write_file, update_board
 
-# --- CUSTOM SAVER IMPORTS ---
 from langgraph.checkpoint.base import BaseCheckpointSaver, Checkpoint, CheckpointMetadata, CheckpointTuple
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
@@ -42,7 +41,28 @@ pm_config = get_agent_config("project_manager")
 architect_config = get_agent_config("technical_architect")
 frontend_config = get_agent_config("head_of_frontend")
 
-# --- 2. MODEL SETUP ---
+# --- 2. THE ADAPTER (Grok's Fix) ---
+class GeminiToolAdapter(ChatVertexAI):
+    """
+    Wraps ChatVertexAI to sanitize message history before sending to Google.
+    Converts strict-breaking ToolMessages into friendly HumanMessages.
+    """
+    def _generate(self, messages: List[BaseMessage], stop: Optional[List[str]] = None, run_manager: Optional[Any] = None, **kwargs: Any):
+        sanitized_messages = []
+        for msg in messages:
+            if isinstance(msg, ToolMessage):
+                # Convert Tool Output to Human Text
+                content = f"Tool Output ({msg.name or 'unknown'}): {msg.content}"
+                sanitized_messages.append(HumanMessage(content=content))
+            elif isinstance(msg, (HumanMessage, AIMessage, SystemMessage)):
+                sanitized_messages.append(msg)
+            else:
+                # Fallback for generic BaseMessage
+                sanitized_messages.append(HumanMessage(content=str(msg.content)))
+        
+        return super()._generate(sanitized_messages, stop=stop, run_manager=run_manager, **kwargs)
+
+# --- 3. MODEL SETUP ---
 safety_settings = {
     HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
@@ -52,7 +72,8 @@ safety_settings = {
 
 REGION = "us-central1"
 
-llm_flash = ChatVertexAI(
+# Use Adapter for Flash (Workers)
+llm_flash = GeminiToolAdapter(
     model_name="gemini-2.5-flash",
     project=os.environ.get("GCP_PROJECT", "vibe-agent-final"),
     location=REGION,
@@ -60,6 +81,7 @@ llm_flash = ChatVertexAI(
     safety_settings=safety_settings,
 )
 
+# Use Standard for PM (Supervisor handles its own simple history)
 llm_pro = ChatVertexAI(
     model_name="gemini-2.5-pro",
     project=os.environ.get("GCP_PROJECT", "vibe-agent-final"),
@@ -68,11 +90,20 @@ llm_pro = ChatVertexAI(
     safety_settings=safety_settings,
 )
 
-# --- 3. AGENTS ---
-architect_agent = create_react_agent(llm_flash, tools=[write_file, read_file], state_modifier=architect_config.get("system_prompt"))
-frontend_agent = create_react_agent(llm_flash, tools=[write_file, read_file, list_files], state_modifier=frontend_config.get("system_prompt"))
+# --- 4. AGENTS (Restored create_react_agent) ---
+architect_agent = create_react_agent(
+    llm_flash, 
+    tools=[write_file, read_file, update_board], 
+    state_modifier=architect_config.get("system_prompt")
+)
 
-# --- 4. SUPERVISOR ---
+frontend_agent = create_react_agent(
+    llm_flash, 
+    tools=[write_file, read_file, list_files], 
+    state_modifier=frontend_config.get("system_prompt")
+)
+
+# --- 5. SUPERVISOR ---
 class AgentState(TypedDict, total=False):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     next: Literal["supervisor", "technical_architect", "head_of_frontend", "__end__"]
@@ -89,33 +120,53 @@ supervisor_prompt = ChatPromptTemplate.from_messages([
 ])
 supervisor = supervisor_prompt | supervisor_router
 
-def supervisor_node(state: AgentState):
-    print(f"--- SUPERVISOR NODE (History Length: {len(state['messages'])}) ---")
+def supervisor_node(state: AgentState, config):
+    print(f"--- SUPERVISOR NODE (History: {len(state['messages'])}) ---")
     
+    # We still perform basic sanitization for the Supervisor just in case
+    # but the Adapter handles the heavy lifting for the workers.
     safe_messages = []
     for msg in state["messages"]:
-        if hasattr(msg, "content") and not isinstance(msg, (HumanMessage, AIMessage, SystemMessage)):
-            safe_messages.append(AIMessage(content=str(msg.content)))
-        else:
+        if isinstance(msg, (HumanMessage, AIMessage, SystemMessage)):
             safe_messages.append(msg)
-    
+        else:
+            safe_messages.append(HumanMessage(content=str(msg.content)))
+
     decision: RoutingDecision = supervisor.invoke({"messages": safe_messages})
     print(f"--- DECISION: {decision.action} ---")
     
+    thread_id = config["configurable"].get("thread_id", "unknown")
+    
     if decision.action == "delegate_to_architect":
-        return {"messages": [HumanMessage(content=decision.response_content, name="Supervisor")], "next": "technical_architect"}
+        instruction = f"Context Thread ID: {thread_id}. Instruction: {decision.response_content}"
+        return {"messages": [HumanMessage(content=instruction, name="Supervisor")], "next": "technical_architect"}
+    
     elif decision.action == "delegate_to_frontend":
-        return {"messages": [HumanMessage(content=decision.response_content, name="Supervisor")], "next": "head_of_frontend"}
+        instruction = f"Context Thread ID: {thread_id}. Instruction: {decision.response_content}"
+        return {"messages": [HumanMessage(content=instruction, name="Supervisor")], "next": "head_of_frontend"}
+    
     else:
         return {"messages": [AIMessage(content=decision.response_content)], "next": "__end__"}
 
 def architect_node(state: AgentState):
-    return {"messages": architect_agent.invoke(state)["messages"]}
+    print("--- ARCHITECT NODE ---")
+    # Clean Slate Input for the Worker
+    last_msg = state["messages"][-1]
+    result = architect_agent.invoke({"messages": [last_msg]})
+    
+    # Wrap output as HumanMessage to prevent AI->AI crash in main loop
+    last_output = result["messages"][-1]
+    return {"messages": [HumanMessage(content=f"ARCHITECT REPORT:\n{last_output.content}", name="Architect")]}
 
 def frontend_node(state: AgentState):
-    return {"messages": frontend_agent.invoke(state)["messages"]}
+    print("--- FRONTEND NODE ---")
+    last_msg = state["messages"][-1]
+    result = frontend_agent.invoke({"messages": [last_msg]})
+    
+    last_output = result["messages"][-1]
+    return {"messages": [HumanMessage(content=f"FRONTEND REPORT:\n{last_output.content}", name="Frontend")]}
 
-# --- 5. TOPOLOGY ---
+# --- 6. TOPOLOGY ---
 workflow = StateGraph(AgentState)
 workflow.add_node("supervisor", supervisor_node)
 workflow.add_node("technical_architect", architect_node)
@@ -125,17 +176,15 @@ workflow.add_conditional_edges("supervisor", lambda s: s.get("next"), {"technica
 workflow.add_edge("technical_architect", "supervisor")
 workflow.add_edge("head_of_frontend", "supervisor")
 
-# --- 6. THE CUSTOM ENGINE (Grok's Option 3 - Modified) ---
+# --- 7. CUSTOM SAVER ---
 class CustomFirestoreSaver(BaseCheckpointSaver):
     def __init__(self, client: firestore.Client, collection: str = "checkpoints"):
         super().__init__(serde=JsonPlusSerializer())
         self.client = client
         self.collection = collection
 
-    # Synchronous Get (Required by BaseCheckpointSaver)
     def get_tuple(self, config: Dict[str, Any]) -> Optional[CheckpointTuple]:
         thread_id = config["configurable"]["thread_id"]
-        # Get the LATEST checkpoint by sorting descending
         query = (
             self.client.collection(self.collection)
             .where("thread_id", "==", thread_id)
@@ -143,14 +192,10 @@ class CustomFirestoreSaver(BaseCheckpointSaver):
             .limit(1)
         )
         docs = list(query.stream())
-        
-        if not docs:
-            return None
-            
+        if not docs: return None
         data = docs[0].to_dict()
         checkpoint = self.serde.loads(data["checkpoint"])
         metadata = self.serde.loads(data["metadata"])
-        # Reconstruct config
         final_config = {
             "configurable": {
                 "thread_id": thread_id,
@@ -160,30 +205,23 @@ class CustomFirestoreSaver(BaseCheckpointSaver):
         }
         return CheckpointTuple(final_config, checkpoint, metadata, None)
 
-    # Async Get (Required)
     async def aget_tuple(self, config: Dict[str, Any]) -> Optional[CheckpointTuple]:
         return await asyncio.to_thread(self.get_tuple, config)
 
-    # List (Stubbed - Not strictly needed for basic flow)
     def list(self, config: Optional[Dict[str, Any]], *, filter: Optional[Dict[str, Any]] = None, before: Optional[Dict[str, Any]] = None, limit: Optional[int] = None) -> AsyncIterator[CheckpointTuple]:
-        return [] # Placeholder
+        return []
 
     async def alist(self, config: Optional[Dict[str, Any]], *, filter: Optional[Dict[str, Any]] = None, before: Optional[Dict[str, Any]] = None, limit: Optional[int] = None) -> AsyncIterator[CheckpointTuple]:
-        return [] # Placeholder
+        return []
 
-    # Async Put
     async def aput(self, config: Dict[str, Any], checkpoint: Checkpoint, metadata: CheckpointMetadata, new_versions: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         thread_id = config["configurable"]["thread_id"]
         checkpoint_ns = config["configurable"].get("checkpoint_ns", "")
-        
-        # ID GENERATION STRATEGY: Time-Sortable
-        # If ID is missing, generate one that is alphabetically consistently increasing
         if config["configurable"].get("checkpoint_id"):
              checkpoint_id = config["configurable"]["checkpoint_id"]
         else:
              checkpoint_id = f"{int(time.time()*1000)}_{str(uuid.uuid4())[:8]}"
         
-        # Serialize
         doc_data = {
             "thread_id": thread_id,
             "checkpoint_ns": checkpoint_ns,
@@ -192,25 +230,13 @@ class CustomFirestoreSaver(BaseCheckpointSaver):
             "metadata": self.serde.dumps(metadata),
             "created_at": firestore.SERVER_TIMESTAMP
         }
-        
-        # Write (Async via thread)
         doc_ref = self.client.collection(self.collection).document(f"{thread_id}_{checkpoint_id}")
         await asyncio.to_thread(doc_ref.set, doc_data)
-        
-        return {
-            "configurable": {
-                "thread_id": thread_id,
-                "checkpoint_ns": checkpoint_ns,
-                "checkpoint_id": checkpoint_id
-            }
-        }
+        return {"configurable": {"thread_id": thread_id, "checkpoint_ns": checkpoint_ns, "checkpoint_id": checkpoint_id}}
 
-    # Sync Put (Required)
     def put(self, config: Dict[str, Any], checkpoint: Checkpoint, metadata: CheckpointMetadata, new_versions: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-        # Not used by async runner but good to have
         return {}
 
-# COMPILE WITH CUSTOM ENGINE
 checkpointer = CustomFirestoreSaver(db, "custom_checkpoints")
 graph = workflow.compile(checkpointer=checkpointer)
 
